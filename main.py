@@ -320,8 +320,19 @@ class App:
             y_values = []
             for item in selected_items:
                 item_values = self.treeview.item(item, "values")
-                x_values.append(float(item_values[selected_indices[0]]))  # Use the first selected column for x-axis
-                y_values.append(float(item_values[selected_indices[1]]))  # Use the second selected column for y-axis
+                x_value = item_values[selected_indices[0]]
+                y_value = item_values[selected_indices[1]]
+
+                # Try converting the values to numbers
+                try:
+                    x_value = float(x_value)
+                    y_value = float(y_value)
+                except ValueError:
+                    messagebox.showinfo("Invalid Data Type", "Selected columns must contain numerical values.")
+                    return
+
+                x_values.append(x_value)  # Use the first selected column for x-axis
+                y_values.append(y_value)  # Use the second selected column for y-axis
 
             # Get selected chart type
             chart_type = chart_type_var.get()
