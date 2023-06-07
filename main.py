@@ -124,58 +124,109 @@ class App:
             self.treeview.insert("", tk.END, values=row)
 
     def calculate_detailed(self):
-        # Clear existing data from Treeview
-        self.min_max_treeview.delete(*self.min_max_treeview.get_children())
+        # Check if the window is already open
+        if getattr(self, "min_max_window", None) is not None and self.min_max_window.winfo_exists():
+            # Window is already open, do nothing
+            return
 
-        # Get data from Treeview
-        data = []
-        for idx, column in enumerate(self.treeview["columns"]):
-            column_data = []
-            for item in self.treeview.get_children():
-                value = self.treeview.set(item, column)
-                try:
-                    column_data.append(float(value))
-                except ValueError:
-                    column_data.append(value)  # Handle text values
-            data.append(column_data)
+        # Create a new window
+        self.min_max_window = tk.Toplevel(self.master)
+        min_max_window = self.min_max_window
+        min_max_window.title("Select Columns")
 
-        # Calculate statistics for each column
-        statistics_values = []
-        for col_idx in range(len(data)):
-            column_data = data[col_idx]
-            column_name = self.treeview["columns"][col_idx]
-            if all(isinstance(val, float) for val in column_data):
-                # Numeric column
-                min_value = min(column_data)
-                max_value = max(column_data)
-                mean_value = round(np.mean(column_data), 2)
-                median_value = np.median(column_data)
-                mode_value = statistics.mode(column_data)
-                if len(column_data) > 1:
-                    stdev_value = round(np.std(column_data, ddof=1), 2)
+        # Configure the window size and position
+        window_width = 400
+        window_height = 300
+        screen_width = min_max_window.winfo_screenwidth()
+        screen_height = min_max_window.winfo_screenheight()
+        x = int((screen_width / 2) - (window_width / 2))
+        y = int((screen_height / 2) - (window_height / 2))
+        min_max_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+
+        # Create a label
+        label = ttk.Label(min_max_window, text="Select columns for statistical calculations",
+                          font=("Arial", 14, "bold"))
+        label.pack(pady=20)
+
+        # Create a listbox to display available columns
+        listbox = tk.Listbox(min_max_window, selectmode=tk.MULTIPLE, font=("Arial", 12), height=8)
+        listbox.pack()
+
+        # Add columns to the listbox
+        columns = self.treeview["columns"]
+        for column in columns:
+            listbox.insert(tk.END, column)
+
+        # Select all columns by default
+        listbox.selection_set(0, tk.END)
+
+        def calculate():
+            # Get selected columns
+            selected_columns = [listbox.get(index) for index in listbox.curselection()]
+
+            if len(selected_columns) == 0:
+                # Show error message if no columns are selected
+                messagebox.showerror("Error", "Please select at least one column.")
+                return
+
+            # Clear existing data from Treeview
+            self.min_max_treeview.delete(*self.min_max_treeview.get_children())
+
+            # Get data from Treeview
+            data = []
+            for idx, column in enumerate(self.treeview["columns"]):
+                if column in selected_columns:
+                    column_data = []
+                    for item in self.treeview.get_children():
+                        value = self.treeview.set(item, column)
+                        try:
+                            column_data.append(float(value))
+                        except ValueError:
+                            column_data.append(value)  # Handle text values
+                    data.append(column_data)
+
+            # Calculate statistics for each selected column
+            statistics_values = []
+            for col_idx in range(len(data)):
+                column_data = data[col_idx]
+                column_name = selected_columns[col_idx]
+                if all(isinstance(val, float) for val in column_data):
+                    # Numeric column
+                    min_value = min(column_data)
+                    max_value = max(column_data)
+                    mean_value = round(statistics.mean(column_data), 2)
+                    stdev_value = round(statistics.stdev(column_data), 2)
+                    median_value = statistics.median(column_data)
+                    mode_value = statistics.mode(column_data)
                 else:
+                    # Text column
+                    counter = Counter(column_data)
+                    mode_value = counter.most_common(1)[0][0] if counter else ""
+                    min_value = ""
+                    max_value = ""
+                    mean_value = ""
                     stdev_value = ""
-            else:
-                # Text column
-                counter = Counter(column_data)
-                min_value = ""
-                max_value = ""
-                mean_value = ""
-                stdev_value = ""
-                median_value = ""
-                mode_value = counter.most_common(1)[0][0] if counter else ""
+                    median_value = ""
 
-            statistics_values.append(
-                (column_name, min_value, max_value, mean_value, stdev_value, median_value, mode_value))
+                statistics_values.append(
+                    (column_name, min_value, max_value, mean_value, median_value, mode_value,stdev_value))
 
-        # Insert statistics values into Treeview
-        for i, (column_name, min_value, max_value, mean_value, stdev_value, median_value, mode_value) in enumerate(
-                statistics_values):
-            self.min_max_treeview.insert("", tk.END, values=[column_name, min_value, max_value, mean_value, stdev_value,
-                                                             median_value, mode_value])
+            # Insert statistics values into Treeview
+            for i, (column_name, min_value, max_value, mean_value, median_value, mode_value,stdev_value) in enumerate(
+                    statistics_values):
+                self.min_max_treeview.insert("", tk.END,
+                                             values=[column_name, min_value, max_value, mean_value,
+                                                     median_value, mode_value, stdev_value])
 
-        for col in self.min_max_treeview["columns"]:
-            self.min_max_treeview.column(col, anchor="center")
+            for col in self.min_max_treeview["columns"]:
+                self.min_max_treeview.column(col, anchor="center")
+
+            # Close the window
+            min_max_window.destroy()
+
+        # Create a button to calculate statistics
+        calculate_button = ttk.Button(min_max_window, text="Calculate", command=calculate)
+        calculate_button.pack()
 
     def calculate_correlation(self):
         # Clear existing data from Treeview
@@ -297,7 +348,7 @@ class App:
 
         tk.Label(chart_type_frame, text="Chart Type:").pack(side=tk.LEFT)
 
-        chart_types = [("Line", "line"), ("Scatter", "scatter"), ("Bar", "bar")]
+        chart_types = [("Scatter", "scatter"), ("Bar", "bar")]
         for chart_label, chart_type in chart_types:
             tk.Radiobutton(
                 chart_type_frame,
@@ -308,10 +359,17 @@ class App:
 
         def plot_selected_columns():
             # Get selected columns from listbox
+            chart_type = chart_type_var.get()
+
             selected_indices = listbox.curselection()
-            if len(selected_indices) != 2:
-                messagebox.showinfo("Invalid Selection", "Please select exactly two columns.")
-                return
+            if chart_type == "bar":
+                if len(selected_indices) != 1:
+                    messagebox.showinfo("Invalid Selection", "Please select one column for this type of chart.")
+                    return
+            else:
+                if len(selected_indices) != 2:
+                    messagebox.showinfo("Invalid Selection", "Please select exactly two columns.")
+                    return
 
             selected_columns = [columns[idx] for idx in selected_indices]
 
@@ -320,35 +378,30 @@ class App:
             y_values = []
             for item in selected_items:
                 item_values = self.treeview.item(item, "values")
-                x_value = item_values[selected_indices[0]]
-                y_value = item_values[selected_indices[1]]
+                x_values.append(float(item_values[selected_indices[0]]))  # Use the first selected column for x-axis
 
-                # Try converting the values to numbers
-                try:
-                    x_value = float(x_value)
-                    y_value = float(y_value)
-                except ValueError:
-                    messagebox.showinfo("Invalid Data Type", "Selected columns must contain numerical values.")
-                    return
-
-                x_values.append(x_value)  # Use the first selected column for x-axis
-                y_values.append(y_value)  # Use the second selected column for y-axis
+                if len(selected_indices) > 1:
+                    y_values.append(
+                        float(item_values[selected_indices[1]]))  # Use the second selected column for y-axis
 
             # Get selected chart type
-            chart_type = chart_type_var.get()
-
             # Create plot
             plt.figure(figsize=(8, 6))
 
-            if chart_type == "line":
-                plt.plot(x_values, y_values, 'b-')  # Plot as a line
-            elif chart_type == "scatter":
+            if chart_type == "scatter":
                 plt.scatter(x_values, y_values, color='b', marker='o')  # Plot as scatter points
             elif chart_type == "bar":
-                plt.bar(x_values, y_values, color='b')  # Plot as bar chart
+                if len(selected_indices) == 1:
+                    unique_x_values = list(set(x_values))
+                    y_counts = [x_values.count(value) for value in unique_x_values]
+                    plt.bar(unique_x_values, y_counts, color='b')  # Plot as bar chart with counts on y-axis
+                    plt.xlabel(selected_columns[0])  # Label x-axis with the selected column
+                    plt.ylabel("Count")  # Label y-axis as "Count"
+                else:
+                    plt.bar(x_values, y_values, color='b')  # Plot as bar chart
+                    plt.xlabel(selected_columns[0])  # Label x-axis with the first selected column
+                    plt.ylabel(selected_columns[1])  # Label y-axis with the second selected column
 
-            plt.xlabel(selected_columns[0])  # Label x-axis with the first selected column
-            plt.ylabel(selected_columns[1])  # Label y-axis with the second selected column
             plt.title("Plot Title")
             plt.show()
 
@@ -361,7 +414,6 @@ class App:
 
         # Run the dialog window
         self.master.wait_window(dialog_window)
-
 
 if __name__ == '__main__':
     root = tk.Tk()
