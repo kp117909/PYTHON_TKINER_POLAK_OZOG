@@ -148,19 +148,22 @@ class App:
                 # Numeric column
                 min_value = min(column_data)
                 max_value = max(column_data)
-                mean_value = round(statistics.mean(column_data), 2)
-                stdev_value = round(statistics.stdev(column_data), 2)
-                median_value = statistics.median(column_data)
+                mean_value = round(np.mean(column_data), 2)
+                median_value = np.median(column_data)
                 mode_value = statistics.mode(column_data)
+                if len(column_data) > 1:
+                    stdev_value = round(np.std(column_data, ddof=1), 2)
+                else:
+                    stdev_value = ""
             else:
                 # Text column
                 counter = Counter(column_data)
-                mode_value = counter.most_common(1)[0][0] if counter else ""
                 min_value = ""
                 max_value = ""
                 mean_value = ""
                 stdev_value = ""
                 median_value = ""
+                mode_value = counter.most_common(1)[0][0] if counter else ""
 
             statistics_values.append(
                 (column_name, min_value, max_value, mean_value, stdev_value, median_value, mode_value))
