@@ -25,8 +25,8 @@ class App:
         self.load_button = ttk.Menubutton(self.master, text="File")
         self.load_button.menu = tk.Menu(self.load_button, tearoff=0)
         self.load_button["menu"] = self.load_button.menu
-        self.load_button.menu.add_command(label="Open", command=self.load_csv)
-        self.load_button.menu.add_command(label="Export", command=self.export_data)
+        self.load_button.menu.add_command(label="Open Data", command=self.load_csv)
+        self.load_button.menu.add_command(label="Export Data", command=self.export_data)
         self.load_button.menu.add_command(label="Create Plot", command=self.create_plot)
 
         self.load_button.pack(anchor=tk.W, fill=tk.X, expand=True)
@@ -216,6 +216,7 @@ class App:
     def export_data(self):
         selected_rows = self.treeview.selection()
         if not selected_rows:
+            messagebox.showinfo("No Selection", "No rows selected.")
             return
 
         # Create dialog window
@@ -272,6 +273,9 @@ class App:
         # Check if any items are selected in Treeview
         selected_items = self.treeview.selection()
 
+        if not selected_items:
+            messagebox.showinfo("No Selection", "No rows selected.")
+            return
         # Create dialog window
         dialog_window = tk.Toplevel(self.master)
         dialog_window.title("Select Columns and Chart Type")
