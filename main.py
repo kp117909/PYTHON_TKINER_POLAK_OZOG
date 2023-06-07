@@ -1,4 +1,5 @@
 import tkinter as tk
+from collections import Counter
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 import tkinter.ttk as ttk
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 class App:
     def __init__(self, master):
         self.master = master
-        self.master.title("CSV Viewer")
+        self.master.title("STATISTIC REVIEW 1.0")
 
         self.master.geometry("800x600")  # Ustawienie domyślnego rozmiaru okna
         self.master.maxsize(width=self.master.winfo_screenwidth(), height=self.master.winfo_screenheight())
@@ -84,7 +85,7 @@ class App:
 
         self.min_max_treeview.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        self.min_max_button = ttk.Button(self.min_max_tab, text="Calculate", command=self.calculate_min_max)
+        self.min_max_button = ttk.Button(self.min_max_tab, text="Calculate", command=self.calculate_detailed)
         self.min_max_button.pack(side=tk.BOTTOM)
 
         # Add new tab for correlation matrix
@@ -122,40 +123,56 @@ class App:
         for row in data[1:]:
             self.treeview.insert("", tk.END, values=row)
 
-    def calculate_min_max(self):
+    def calculate_detailed(self):
         # Clear existing data from Treeview
         self.min_max_treeview.delete(*self.min_max_treeview.get_children())
 
         # Get data from Treeview
         data = []
         for idx, column in enumerate(self.treeview["columns"]):
-            data.append([column])
+            column_data = []
             for item in self.treeview.get_children():
                 value = self.treeview.set(item, column)
-                data[idx].append(value)
+                try:
+                    column_data.append(float(value))
+                except ValueError:
+                    column_data.append(value)  # Handle text values
+            data.append(column_data)
 
         # Calculate statistics for each column
         statistics_values = []
         for col_idx in range(len(data)):
-            column_data = [float(value) for value in data[col_idx][1:]]
-            min_value = min(column_data)
-            max_value = max(column_data)
-            column_name = data[col_idx][0]
-            mean_value = round(statistics.mean(column_data),2)
-            median_value = statistics.median(column_data)
-            mode_value = statistics.mode(column_data)
-            stdev_value = round(statistics.stdev(column_data),2)
+            column_data = data[col_idx]
+            column_name = self.treeview["columns"][col_idx]
+            if all(isinstance(val, float) for val in column_data):
+                # Numeric column
+                min_value = min(column_data)
+                max_value = max(column_data)
+                mean_value = round(statistics.mean(column_data), 2)
+                stdev_value = round(statistics.stdev(column_data), 2)
+                median_value = statistics.median(column_data)
+                mode_value = statistics.mode(column_data)
+            else:
+                # Text column
+                counter = Counter(column_data)
+                mode_value = counter.most_common(1)[0][0] if counter else ""
+                min_value = ""
+                max_value = ""
+                mean_value = ""
+                stdev_value = ""
+                median_value = ""
+
             statistics_values.append(
-                (column_name, min_value, max_value, mean_value, median_value, mode_value, stdev_value))
+                (column_name, min_value, max_value, mean_value, stdev_value, median_value, mode_value))
 
         # Insert statistics values into Treeview
-        for i, (column_name, min_value, max_value, mean_value,median_value, mode_value, stdev_value) in enumerate(
+        for i, (column_name, min_value, max_value, mean_value, stdev_value, median_value, mode_value) in enumerate(
                 statistics_values):
-            self.min_max_treeview.insert("", tk.END, values=[column_name, min_value, max_value, mean_value,
-                                                             median_value, mode_value, stdev_value])
+            self.min_max_treeview.insert("", tk.END, values=[column_name, min_value, max_value, mean_value, stdev_value,
+                                                             median_value, mode_value])
 
-            for col in self.min_max_treeview["columns"]:
-                self.min_max_treeview.column(col, anchor="center")
+        for col in self.min_max_treeview["columns"]:
+            self.min_max_treeview.column(col, anchor="center")
 
     def calculate_correlation(self):
         # Clear existing data from Treeview
@@ -183,47 +200,150 @@ class App:
         correlation_matrix = np.corrcoef(data)
 
         # Insert correlation matrix into Treeview
-        self.correlation_treeview["columns"] = columns
+        self.correlation_treeview["columns"] = [" "] + columns
+        self.correlation_treeview.column("#0", width=100, anchor=tk.CENTER)
+        self.correlation_treeview.heading("#0", text=" ", anchor=tk.CENTER)
         for col in columns:
             self.correlation_treeview.column(col, width=100, anchor=tk.CENTER)
             self.correlation_treeview.heading(col, text=col, anchor=tk.CENTER)
         for i, row in enumerate(correlation_matrix):
             values = [round(x, 2) for x in row]
-            self.correlation_treeview.heading(columns[0], text=" ", anchor=tk.CENTER)
             self.correlation_treeview.insert("", tk.END, values=[columns[i]] + values)
 
     def export_data(self):
         selected_rows = self.treeview.selection()
         if not selected_rows:
             return
-        file_path = filedialog.asksaveasfilename(title="Save CSV File", defaultextension=".csv",
-                                                 filetypes=(("CSV Files", "*.csv"), ("All Files", "*.*")))
-        if file_path:
-            selected_data = []
-            # Pobierz nagłówki z głównego pliku
-            headers = [self.treeview.heading(col)["text"] for col in self.treeview["columns"]]
-            selected_data.append(headers)  # Dodaj nagłówki do wybranych danych
-            for row in selected_rows:
-                values = [self.treeview.set(row, col) for col in self.treeview["columns"]]
-                selected_data.append(values)
-            with open(file_path, "w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerows(selected_data)
+
+        # Create dialog window
+        dialog_window = tk.Toplevel(self.master)
+        dialog_window.title("Select Columns")
+
+        # Create listbox to select columns
+        listbox = tk.Listbox(dialog_window, selectmode=tk.MULTIPLE)
+        listbox.pack(padx=10, pady=10)
+
+        # Add columns to listbox
+        columns = self.treeview["columns"]
+        for column in columns:
+            listbox.insert(tk.END, column)
+
+        def export_selected_columns():
+            # Get selected columns from listbox
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showinfo("No Selection", "No columns selected.")
+                dialog_window.destroy()
+                return
+
+            selected_columns = [columns[idx] for idx in selected_indices]
+
+            file_path = filedialog.asksaveasfilename(
+                title="Save CSV File", defaultextension=".csv",
+                filetypes=(("CSV Files", "*.csv"), ("All Files", "*.*")))
+
+            if file_path:
+                selected_data = []
+                headers = [self.treeview.heading(col)["text"] for col in selected_columns]
+                selected_data.append(headers)  # Add headers to selected data
+
+                for row in selected_rows:
+                    values = [self.treeview.set(row, col) for col in selected_columns]
+                    selected_data.append(values)
+
+                with open(file_path, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerows(selected_data)
+
+            # Close dialog window
+            dialog_window.destroy()
+
+        # Add button to export selected columns
+        export_button = tk.Button(dialog_window, text="Export", command=export_selected_columns)
+        export_button.pack(padx=10, pady=10)
+
+        # Run the dialog window
+        self.master.wait_window(dialog_window)
 
     def create_plot(self):
-        selected_items = self.treeview.get_children()
-        values_4 = []
-        values_7 = []
-        for item in selected_items:
-            values_4.append(float(self.treeview.item(item, "values")[3]))
-            values_7.append(float(self.treevgiew.item(item, "values")[6]))
+        # Check if any items are selected in Treeview
+        selected_items = self.treeview.selection()
 
-        plt.figure(figsize=(8, 6))
-        plt.bar(values_4, values_7)
-        plt.xlabel("Number of Childs")
-        plt.ylabel("Life Standards")
-        plt.title("Statistic 1")
-        plt.show()
+        # Create dialog window
+        dialog_window = tk.Toplevel(self.master)
+        dialog_window.title("Select Columns and Chart Type")
+
+        # Create listbox to select columns
+        listbox = tk.Listbox(dialog_window, selectmode=tk.MULTIPLE)
+        listbox.pack(padx=10, pady=5)
+
+        # Add columns to listbox
+        columns = self.treeview["columns"]
+        for column in columns:
+            listbox.insert(tk.END, column)
+
+        # Create radio buttons for chart type
+        chart_type_var = tk.StringVar()
+        chart_type_var.set("line")
+        chart_type_frame = tk.Frame(dialog_window)
+        chart_type_frame.pack(padx=10, pady=5)
+
+        tk.Label(chart_type_frame, text="Chart Type:").pack(side=tk.LEFT)
+
+        chart_types = [("Line", "line"), ("Scatter", "scatter"), ("Bar", "bar")]
+        for chart_label, chart_type in chart_types:
+            tk.Radiobutton(
+                chart_type_frame,
+                text=chart_label,
+                variable=chart_type_var,
+                value=chart_type
+            ).pack(side=tk.LEFT)
+
+        def plot_selected_columns():
+            # Get selected columns from listbox
+            selected_indices = listbox.curselection()
+            if len(selected_indices) != 2:
+                messagebox.showinfo("Invalid Selection", "Please select exactly two columns.")
+                return
+
+            selected_columns = [columns[idx] for idx in selected_indices]
+
+            # Get column values
+            x_values = []
+            y_values = []
+            for item in selected_items:
+                item_values = self.treeview.item(item, "values")
+                x_values.append(float(item_values[selected_indices[0]]))  # Use the first selected column for x-axis
+                y_values.append(float(item_values[selected_indices[1]]))  # Use the second selected column for y-axis
+
+            # Get selected chart type
+            chart_type = chart_type_var.get()
+
+            # Create plot
+            plt.figure(figsize=(8, 6))
+
+            if chart_type == "line":
+                plt.plot(x_values, y_values, 'b-')  # Plot as a line
+            elif chart_type == "scatter":
+                plt.scatter(x_values, y_values, color='b', marker='o')  # Plot as scatter points
+            elif chart_type == "bar":
+                plt.bar(x_values, y_values, color='b')  # Plot as bar chart
+
+            plt.xlabel(selected_columns[0])  # Label x-axis with the first selected column
+            plt.ylabel(selected_columns[1])  # Label y-axis with the second selected column
+            plt.title("Plot Title")
+            plt.show()
+
+            # Close dialog window
+            dialog_window.destroy()
+
+        # Add button to plot selected columns
+        plot_button = tk.Button(dialog_window, text="Plot", command=plot_selected_columns)
+        plot_button.pack(padx=10, pady=5)
+
+        # Run the dialog window
+        self.master.wait_window(dialog_window)
+
 
 if __name__ == '__main__':
     root = tk.Tk()
