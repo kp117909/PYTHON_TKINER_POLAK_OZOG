@@ -14,7 +14,7 @@ class App:
         self.master = master
         self.master.title("STATISTIC REVIEW 1.0")
 
-        self.master.geometry("800x600")  # Ustawienie domyślnego rozmiaru okna
+        self.master.geometry("1200x600")  # Ustawienie domyślnego rozmiaru okna
         self.master.maxsize(width=self.master.winfo_screenwidth(), height=self.master.winfo_screenheight())
 
         style = ttk.Style()
@@ -28,6 +28,7 @@ class App:
         self.load_button.menu.add_command(label="Open Data", command=self.load_csv)
         self.load_button.menu.add_command(label="Export Data", command=self.export_data)
         self.load_button.menu.add_command(label="Create Plot", command=self.create_plot)
+        self.load_button.menu.add_command(label="Classify Data", command=self.open_classify_dialog)
 
         self.load_button.pack(anchor=tk.W, fill=tk.X, expand=True)
 
@@ -64,7 +65,7 @@ class App:
 
         # Add Treeview widget for min/max values
         self.min_max_treeview = ttk.Treeview(self.min_max_tab,
-                                             columns=["Column", "Min", "Max", "Mean", "Median", "Mode", "St_dev"],
+                                             columns=["Column", "Min", "Max", "Mean", "Median", "Mode", "St_dev", "text_value_counts"],
                                              show="headings")
 
         self.min_max_treeview.column("Column", minwidth=100, width=200)
@@ -74,6 +75,7 @@ class App:
         self.min_max_treeview.column("Median", minwidth=75, width=75)
         self.min_max_treeview.column("Mode", minwidth=75, width=75)
         self.min_max_treeview.column("St_dev", minwidth=75, width=75)
+        self.min_max_treeview.column("text_value_counts", minwidth=200, width=200)
 
         self.min_max_treeview.heading("Column", text="Column")
         self.min_max_treeview.heading("Min", text="Min")
@@ -82,6 +84,7 @@ class App:
         self.min_max_treeview.heading("Median", text="Median")
         self.min_max_treeview.heading("Mode", text="Mode")
         self.min_max_treeview.heading("St_dev", text="St_dev")
+        self.min_max_treeview.heading("text_value_counts", text="Qnt Of Text Value")
 
         self.min_max_treeview.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -198,6 +201,7 @@ class App:
                     stdev_value = round(statistics.stdev(column_data), 2)
                     median_value = statistics.median(column_data)
                     mode_value = statistics.mode(column_data)
+                    value_counts = ""
                 else:
                     # Text column
                     counter = Counter(column_data)
@@ -207,16 +211,19 @@ class App:
                     mean_value = ""
                     stdev_value = ""
                     median_value = ""
+                    value_counts = ", ".join(f"{value}: {count}" for value, count in counter.items())
 
                 statistics_values.append(
-                    (column_name, min_value, max_value, mean_value, median_value, mode_value,stdev_value))
+                    (
+                    column_name, min_value, max_value, mean_value, median_value, mode_value, stdev_value, value_counts))
 
             # Insert statistics values into Treeview
-            for i, (column_name, min_value, max_value, mean_value, median_value, mode_value,stdev_value) in enumerate(
+            for i, (column_name, min_value, max_value, mean_value, median_value, mode_value, stdev_value,
+                    value_counts) in enumerate(
                     statistics_values):
                 self.min_max_treeview.insert("", tk.END,
                                              values=[column_name, min_value, max_value, mean_value,
-                                                     median_value, mode_value, stdev_value])
+                                                     median_value, mode_value, stdev_value, value_counts])
 
             for col in self.min_max_treeview["columns"]:
                 self.min_max_treeview.column(col, anchor="center")
@@ -414,6 +421,62 @@ class App:
 
         # Run the dialog window
         self.master.wait_window(dialog_window)
+
+    def open_classify_dialog(self):
+        dialog = tk.Toplevel(self.master)
+        dialog.title("Klasyfikacja")
+
+        column_label = ttk.Label(dialog, text="Wybierz kolumnę:")
+        column_label.pack()
+
+        column_combobox = ttk.Combobox(dialog, values=self.get_column_names())
+        column_combobox.pack()
+
+        row_label = ttk.Label(dialog, text="Wybierz wiersz:")
+        row_label.pack()
+
+        row_combobox = ttk.Combobox(dialog, values=self.get_row_names())
+        row_combobox.pack()
+
+        classify_button = ttk.Button(dialog, text="Klasyfikuj",
+                                     command=lambda: self.classify_data(dialog, column_combobox.get(),
+                                                                        row_combobox.get()))
+        classify_button.pack()
+
+    def classify_data(self, dialog, selected_column, selected_row):
+        selected_item = self.treeview.selection()
+
+        if selected_column and selected_row:
+            threshold = 0.5  # Próg klasyfikacji
+
+            # Pobierz wybrany element danych
+            item = self.treeview.set(selected_item, selected_column)
+            if item:
+                # Klasyfikacja danych na podstawie progu
+                if float(item.values()) > threshold:
+                    classification = "Pozytywny"
+                else:
+                    classification = "Negatywny"
+
+                # Wyświetl wynik klasyfikacji
+                messagebox.showinfo("Klasyfikacja", f"Wynik klasyfikacji: {classification}")
+            else:
+                messagebox.showwarning("Błąd", "Brak wartości dla wybranego elementu.")
+        else:
+            messagebox.showwarning("Błąd", "Nie wybrano żadnego elementu, kolumny lub wiersza.")
+
+    def get_column_names(self):
+        # Zwróć nazwy kolumn jako listę
+        if self.treeview['columns']:
+            return self.treeview['columns']
+        else:
+            return []
+
+    def get_row_names(self):
+        # Zwróć nazwy wierszy jako listę
+        rows = self.treeview.get_children()
+        return rows
+
 
 if __name__ == '__main__':
     root = tk.Tk()
